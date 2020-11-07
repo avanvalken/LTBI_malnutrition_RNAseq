@@ -50,10 +50,11 @@ knitr::opts_chunk$set(echo = FALSE)
 # Loading and processing data
 ```{r load data, include=FALSE}
 
-#indata is a SingleCellExperiment object
+#indata is a SingleCellExperiment of the combined datasets
+
 indata <- readRDS("new_indata_SCE.rds")
 
-
+## combined datasets, used to make "new_indata_SCE.rds". Code included for reference. 
 #indatalist <- SummarizedExperiment(assays = SimpleList(counts = as.matrix(indatalist$indata2)), colData = DataFrame(indatalist$metadata_added))
 #metadata_added = indatalist$metadata_added
 #rm(indatalist)
@@ -150,8 +151,9 @@ saveRDS(indata_SCE, file = "indata_SCE.rds")
 Using the DESeq object and PCAplot function on the ComBat corrected data
 
 
-```{r PCA, fig.cap="PCA plot created with the DESeq object and PCAplot function on the Combat-Seq batch corrected data.", fig.height=4, fig.width=4,output = "SVG"  echo=FALSE}
+```{r PCA, fig.cap="PCA plot created with the DESeq object and PCAplot function on the Combat-Seq batch corrected data.",  echo=FALSE}
 
+# Changed plotPCA function to plot PCA2 and PCA3
 plotARTPCA <- function (object, intgroup = "condition", ntop = 500, returnData = FALSE) 
 {
     rv <- rowVars(assay(object))
@@ -230,10 +232,7 @@ plot(g)
 
 # Differential expression {.tabset}
 ```{r diffex}
-#designMat <- model.matrix(~factor(Tb_status) + factor(bmi_cat2) + factor(Tb_status):factor(bmi_cat2), data=colData(indata))
-
-#designMat <- model.matrix(~factor(Tb_status) + factor(bmi_cat2), data=colData(indata))
-
+## make a matrix for differential expression
 designMat <- model.matrix(~factor(bmi_cat2), data=colData(indata))
 
 colnames(designMat)
@@ -243,7 +242,7 @@ head(designMat)
 
 fit <- lmFit(assay(indata, "log_cpm"), designMat)
 
-# Difference in expression between activeTB individuals and LTBI individuals, among malnourished individuals
+## Difference in expression between well-nourished and malnourished individuals with LTBI individuals, among malnourished individuals
 
 contrast.matrixNut<- makeContrasts(wellnourished, levels = designMat)
 fitNut <- contrasts.fit(fit,contrast.matrixNut)
@@ -254,34 +253,19 @@ limmaResNut <- topTable(fitNut, adjust.method = "BH", n = Inf, sort.by = "P")
 dim(limmaResNut[limmaResNut$adj.P.Val <0.05,])
 table(colData(indata)$bmi_cat2)
 
+## histograms to analyze adjusted p-values and p-values of limma results; shows spike near 0
 new_hist_padjval_100breaks <- hist(limmaResNut$adj.P.Val, breaks=100)
 new_hist_pval_100breaks <- hist(limmaResNut$P.Value, breaks=100)
-##shows spike near 0
 
+# keep FDR rate < 0.05 and order by FDR for limma results
 sig_limmaResNut <- limmaResNut[limmaResNut$adj.P.Val <0.05,]
 sig_limmaResNut <- sig_limmaResNut[order(sig_limmaResNut$adj.P.Val),]
 
 #write.csv(sig_limmaResNut, "sig_TBgenes_padj.csv")
 
+## make top 500 gene list
 top_500_genes <- limmaResNut[1:500,]
 
-## top 50 by logfc
-###top 50 by p.adj value
-top_50 <- sig_limmaResNut[1:50,]
-#write.csv(top_50, "top_50_by_padj.csv")
-
-
-neg_25_log <- (sig_limmaResNut[sig_limmaResNut$logFC < 0,])
-neg_25_log <- neg_25_log[order(neg_25_log$logFC),]
-neg_25_log <- neg_25_log[1:25,]
-
-#write.csv(neg_25_log, "neg_25_logfc.csv")
-
-top25_lot <- sig_limmaResNut[sig_limmaResNut$logFC >= 0,]
-top25_log <- top25_lot[order(-top25_lot$logFC),]
-top25_log <- top25_log[1:25,]
-
-#write.csv(top25_log, "top_25_logfc.csv")
 
 ```
 
@@ -293,20 +277,20 @@ datatable(top_500_genes,
           options=list(scrollX=T,pageLength=20),
           rownames = T)
 
-## Make a Heatmap of all genes
+## Make a Heatmap of top 500 genes
 mat = as.matrix(assay(indata[row.names(top_500_genes),],"log_cpm"))
 mat = t(scale(t(mat)))
 mat = mat[,order(colData(indata)$"BMI")]
 
+## df for heatmap annotation
 df=data.frame(Nutrition=colData(indata)$"bmi_cat2", BMI=(colData(indata)$"BMI")) 
 
 df=df[order(df$BMI),]
 
-#o1 = seriate(dist(mat), method = "TSP")
-#o2 = seriate(dist(t(mat)), method = "TSP")
-
+## heatmap annotation object
 ha = HeatmapAnnotation(df = df, col = list(TB_status=c("mal"="Red","well"="Blue")))
 
+## heatmap ordered by BMI
 Heatmap(mat,show_row_names=F,show_column_names = T, top_annotation = ha, cluster_columns = FALSE )
 ```
 
@@ -317,7 +301,7 @@ Heatmap(mat,show_row_names=F,show_column_names = T, top_annotation = ha, cluster
 ```{r, message=FALSE, results='hide'}
 
 
-## Add new signatures to the profiler
+## Add new signatures to the profiler *later releases of TBSignatureProfiler may not require this
 TBsignatures$Zhao_NANO_6 <- c("ANKRD22","ATP1A1","BLK","CCR6","DARS2","EXOC2")
 
 TBsignatures$'CYTO6' <- c("CCL11", "IFNG", "IL15", "IL1B", "IL6", "CXCL10")
@@ -328,7 +312,7 @@ TBsignatures$Leong_RISK_29 <- c("SRBD1", "ZNF419", "SH2D1B","CTSA", "GSTA4", "AG
 TBsignatures$Zak_RISK_16 <- c("ANKRD22","APOL1","BATF2" ,"ETV7","FCGR1A", "FCGR1B",  "GBP1","GBP2","GBP4","GBP5", "SCARF1","SEPTIN4", "SERPING1", "STAT1","TAP1","TRAFD1")
 TBsignatures$Suliman_RISK_4 <- c("GAS6", "SEPTIN4", "CD1C", "BLK")
 
-#selected tb signatures
+## selected tb signatures
 samp_tbsignatures <- list(TBsignatures$Suliman_RISK_4, TBsignatures$Sweeney_OD_3, TBsignatures$Leong_RISK_29, TBsignatures$Zak_RISK_16)
 names(samp_tbsignatures) <- c("Suliman_RISK_4", "Sweeney_OD_3", "Leong_RISK_29", "Zak_RISK_16")
 
@@ -337,7 +321,6 @@ gsva_res <- runTBsigProfiler(indata, useAssay = "log_cpm", algorithm = "GSVA",
 ssgsea_res <- runTBsigProfiler(indata, useAssay = "log_cpm", algorithm = "ssGSEA",
                                signatures = samp_tbsignatures, parallel.sz = 4)
 
-plage_res <- runTBsigProfiler(indata, useAssay = "log_cpm", algorithm = "PLAGE", signatures = samp_tbsignatures, parallel.sz = 4)
 
 ```
 
@@ -537,930 +520,10 @@ for (i in names(samp_tbsignatures)){
 ```
 
 
-### PLAGE {.tabset}
-
-
-#### Heatmap
-
-```{r plage_TBsigs}
-signatureHeatmap(plage_res, name="PLAGE", signatureColNames = names(samp_tbsignatures),
-                 annotationColNames = c("bmi_cat2"),
-                 showColumnNames = FALSE,
-                 split_heatmap='none')
-```
-
-
-#### Boxplot
-
-```{r boxplage_TBsigs}
-signatureBoxplot(plage_res, name="PLAGE", signatureColNames = names(samp_tbsignatures),
-                 annotationColName = c("bmi_cat2"))# , rotateLabels = TRUE)
-```
-
-#### Boxplots Single {.tabset}
-
-```{r , results="asis"}
-for (i in names(samp_tbsignatures)){
-
-  cat("#####", i, "\n")
-
-  print(signatureBoxplot(plage_res,
-                         name=i, 
-                         signatureColNames = i,
-                         annotationColName = c("bmi_cat2"),   
-                         violinPlot = TRUE,
-                         rotateLabels = T))
-
-  cat("\n\n")
-}
-
-```
-
-#### Signature plots {.tabset}
-```{r genes_plage_TBsigs, results="asis"}
-for (i in names(samp_tbsignatures)){
-
-  cat("#####", i, "\n")
-
-  signatureGeneHeatmap(plage_res, useAssay="log_cpm",
-                     samp_tbsignatures[[i]],
-                     name = i, signatureColNames = NULL,
-                     annotationColNames = c("bmi_cat2",i),
-                     showColumnNames = TRUE, 
-                     column_order = ordered_bmi[,1])
-
-  cat("\n\n")
-}
-
-```
-
-#### AUC Table {.tabset}
-```{r, message = FALSE}
-set.seed(0)
-tableAUC(plage_res,
-         annotationColName = "bmi_cat2",
-         signatureColNames = names(samp_tbsignatures),
-         num.boot = 100,
-         pb.show = FALSE)
-```
-
-#### AUC Boxplots
-```{r, message = FALSE}
-set.seed(0)
-compareBoxplots(plage_res, annotationColName = "bmi_cat2",
-                signatureColNames = names(samp_tbsignatures),
-                pb.show = FALSE, fill.col = "blue",
-                rotateLabels = TRUE)
-```
-
-#### ROC plots
-```{r, message = FALSE, fig.height = 9, fig.width = 12}
-signatureROCplot_CI(inputData = plage_res,
-                   signatureColNames = names(samp_tbsignatures),
-                   annotationColName = "bmi_cat2")
-
-```
-
-#### Separate ROC plots  {.tabset}
-
-```{r, results = 'asis', message = FALSE}
-for (i in names(samp_tbsignatures)){
-
-  cat("#####", i, "\n")
-
-  print(signatureROCplot_CI(inputData = plage_res,
-                   signatureColNames = i,
-                   annotationColName = "bmi_cat2",
-                   name = paste("ROC plot,", i, sep = " ")))
-
-  cat("\n\n")
-}
-```
-
-
-## M2 Practice
-```{r}
-# Import Dendritic Cell signatures exposed to TB
-dc_dn <- read.table("macrophage_genesets/GSE360_CTRL_VS_M_TUBERCULOSIS_DC_DN.txt", sep = "\t")
-dc_up <- read.table("macrophage_genesets/GSE360_CTRL_VS_M_TUBERCULOSIS_DC_UP.txt", sep = "\t")
-
-# Import Macrophage exposed to TB
-##GSE360_CTRL_VS_M_TUBERCULOSIS_MAC_DN
-tb_mac_dn <- read.table("macrophage_genesets/GSE360_CTRL_VS_M_TUBERCULOSIS_MAC_DN.txt", sep = "\t")
-tb_mac_up <- read.table("macrophage_genesets/GSE360_CTRL_VS_M_TUBERCULOSIS_MAC_UP.txt", sep = "\t")
-
-# Import Macrophage M1 to M2 ratio Signatures 
-m1vm2_dn <- read.table("macrophage_genesets/GSE5099_CLASSICAL_M1_VS_ALTERNATIVE_M2_MACROPHAGE_DN.txt", sep = "\t")
-m1vm2_up <- read.table("macrophage_genesets/GSE5099_CLASSICAL_M1_VS_ALTERNATIVE_M2_MACROPHAGE_UP.txt", sep = "\t")
-
-# Import resting vs active differentiated M2 Macrophage Signatures
-m2_active_dn <- read.table("macrophage_genesets/GSE32164_RESTING_DIFFERENTIATED_VS_ALTERNATIVELY_ACT_M2_MACROPHAGE_DN.txt", sep = "\t")
-m2_active_up <- read.table("macrophage_genesets/GSE32164_RESTING_DIFFERENTIATED_VS_ALTERNATIVELY_ACT_M2_MACROPHAGE_UP.txt", sep = "\t")
-
-# Import DC vs Mac exposed to TB 
-dc_vs_mac_tb_dn <- read.table("macrophage_genesets/GSE360_DC_VS_MAC_M_TUBERCULOSIS_DN.txt", sep = "\t")
-dc_vs_mac_tb_up <- read.table("macrophage_genesets/GSE360_DC_VS_MAC_M_TUBERCULOSIS_UP.txt", sep = "\t")
-
-# Import Monocyte vs M2
-
-mono_vs_m2_dn <- read.table("macrophage_genesets/GSE5099_MONOCYTE_VS_ALTERNATIVE_M2_MACROPHAGE_DN.txt", sep = "\t")
-mono_vs_m2_up <- read.table("macrophage_genesets/GSE5099_MONOCYTE_VS_ALTERNATIVE_M2_MACROPHAGE_UP.txt", sep = "\t")
-
-# Import Monocyte vs M1
-
-mono_vs_m1_dn <- read.table("macrophage_genesets/GSE5099_MONOCYTE_VS_CLASSICAL_M1_MACROPHAGE_DN.txt", sep = "\t")
-mono_vs_m1_up <- read.table("macrophage_genesets/GSE5099_MONOCYTE_VS_CLASSICAL_M1_MACROPHAGE_UP.txt", sep = "\t")
-
-
-
-
-
-
-
-# Turn imported signatures into character vectors
-dc_dn <- as.character(dc_dn[-c(1,2),])
-dc_up <- as.character(dc_up[-c(1,2),])
-
-m1vm2_dn <- as.character(m1vm2_dn[-c(1,2),])
-m1vm2_up <- as.character(m1vm2_up[-c(1,2),])
-
-m2_active_dn <- as.character(m2_active_dn[-c(1,2),])
-m2_active_up <- as.character(m2_active_up[-c(1,2),])
-
-
-tb_mac_dn <- as.character(tb_mac_dn[-c(1,2),])
-tb_mac_up <- as.character(tb_mac_up[-c(1,2),])
-
-dc_vs_mac_tb_dn <- as.character(dc_vs_mac_tb_dn[-c(1,2),])
-dc_vs_mac_tb_up <- as.character(dc_vs_mac_tb_up[-c(1,2),])
-
-mono_vs_m2_dn <- as.character(mono_vs_m2_dn[-c(1,2),])
-mono_vs_m2_up <- as.character(mono_vs_m2_up[-c(1,2),])
-
-mono_vs_m1_dn <- as.character(mono_vs_m1_dn[-c(1,2),])
-mono_vs_m1_up <- as.character(mono_vs_m1_up[-c(1,2),])
-
-
-# Curate signatures into a list
-M2_sig <- list(dc_dn, dc_up, m1vm2_dn, m1vm2_up, m2_active_dn, m2_active_up, tb_mac_dn,tb_mac_up,dc_vs_mac_tb_dn, dc_vs_mac_tb_up, mono_vs_m2_dn, mono_vs_m2_up, mono_vs_m1_dn, mono_vs_m1_up)
-names(M2_sig) <- c("dc_dn", "dc_up", "m1vm2_dn", "m1vm2_up", "m2_active_dn", "m2_active_up", "tb_mac_dn","tb_mac_up","dc_vs_mac_tb_dn", "dc_vs_mac_tb_up", "mono_vs_m2_dn", "mono_vs_m2_up", "mono_vs_m1_dn", "mono_vs_m1_up")
-
-
-
-
-
-
-
-
-```
-
-
-## TBSignatureProfiler on Macrophage development signatures
-```{r, message=FALSE}
-gsva_res <- runTBsigProfiler(indata, useAssay = "log_cpm", algorithm = "GSVA",
-                             signatures = M2_sig, parallel.sz = 4)
-ssgsea_res <- runTBsigProfiler(indata, useAssay = "log_cpm", algorithm = "ssGSEA",
-                               signatures = M2_sig, parallel.sz = 4)
-
-```
-
-### GSVA {.tabset}
-
-#### Heatmap
-
-```{r }
-signatureHeatmap(gsva_res, name="GSVA", signatureColNames = names(M2_sig),
-                 annotationColNames = c("bmi_cat2"),
-                 showColumnNames = FALSE,
-                 split_heatmap='none')
-```
-
-
-#### Boxplot
-
-```{r , message=FALSE}
-signatureBoxplot(gsva_res, name="GSVA", signatureColNames = names(M2_sig),
-                 annotationColName = c("bmi_cat2"))# , rotateLabels = TRUE)
-```
-
-#### Boxplots Single {.tabset}
-
-```{r, message=FALSE , results="asis"}
-for (i in names(M2_sig)){
-
-  cat("#####", i, "\n")
-
-  print(signatureBoxplot(gsva_res,
-                         name=i, 
-                         signatureColNames = i,
-                         annotationColName = c("bmi_cat2"),   
-                         violinPlot = TRUE,
-                         rotateLabels = T))
-
-  cat("\n\n")
-}
-
-```
-
-#### Signature plots {.tabset}
-```{r, message=FALSE , results="asis"}
-for (i in names(M2_sig)){
-
-  cat("#####", i, "\n")
-
-  signatureGeneHeatmap(gsva_res, useAssay="log_cpm",
-                     samp_tbsignatures[[i]],
-                     name = i, signatureColNames = NULL,
-                     annotationColNames = c("bmi_cat2",i),
-                     showColumnNames = TRUE, 
-                     column_order = NULL)
-
-  cat("\n\n")
-}
-
-```
-
-#### AUC Table {.tabset}
-```{r, message = FALSE}
-set.seed(0)
-tableAUC(gsva_res,
-         annotationColName = "bmi_cat2",
-         signatureColNames = names(M2_sig),
-         num.boot = 100,
-         pb.show = FALSE)
-```
-
-#### AUC Boxplots
-```{r, message = FALSE}
-set.seed(0)
-compareBoxplots(gsva_res, annotationColName = "bmi_cat2",
-                signatureColNames = names(M2_sig),
-                pb.show = FALSE, fill.col = "blue",
-                rotateLabels = TRUE)
-```
-
-#### ROC plots
-```{r, message = FALSE, fig.height = 9, fig.width = 12}
-signatureROCplot_CI(inputData = gsva_res,
-                   signatureColNames = names(M2_sig),
-                   annotationColName = "bmi_cat2")
-
-```
-
-#### Separate ROC plots  {.tabset}
-
-```{r, results = 'asis', message = FALSE}
-for (i in names(M2_sig)){
-
-  cat("#####", i, "\n")
-
-  print(signatureROCplot_CI(inputData = gsva_res,
-                   signatureColNames = i,
-                   annotationColName = "bmi_cat2",
-                   name = paste("ROC plot,", i, sep = " ")))
-
-  cat("\n\n")
-}
-```
-
-
-### ssGSEA {.tabset}
-
-#### Heatmap
-
-```{r , message=FALSE}
-signatureHeatmap(ssgsea_res, name="ssGSEA", signatureColNames = names(M2_sig),
-                 annotationColNames = c("bmi_cat2"),
-                 showColumnNames = FALSE, scale = TRUE,
-                 split_heatmap='none')
-```
-
-#### Boxplot
-
-```{r , message=FALSE}
-signatureBoxplot(ssgsea_res, name="ssGSEA", signatureColNames = names(M2_sig),
-                 annotationColName = c("bmi_cat2"), scale = TRUE) #rotateLabels = TRUE,
-```
-
-#### Boxplots Single {.tabset}
-
-```{r , message=FALSE, results="asis"}
-for (i in names(M2_sig)){
-
-  cat("#####", i, "\n")
-
-  print(signatureBoxplot(ssgsea_res, name=i, signatureColNames = i,
-                 annotationColName = c("bmi_cat2"), rotateLabels = T))
-
-  cat("\n\n")
-}
-
-```
-
-#### Signature plots {.tabset}
-```{r, message=FALSE , results="asis"}
-for (i in names(M2_sig)){
-
-  cat("#####", i, "\n")
-
-  signatureGeneHeatmap(ssgsea_res, useAssay="log_cpm",
-                     samp_tbsignatures[[i]],
-                     name = i, signatureColNames = NULL,
-                     annotationColNames = c("bmi_cat2",i),
-                     showColumnNames = FALSE, 
-                     column_order =  NULL)
-
-  cat("\n\n")
-}
-
-```
-
-
-#### AUC Table
-```{r, message = FALSE}
-set.seed(0)
-tableAUC(ssgsea_res,
-         annotationColName = "bmi_cat2",
-         signatureColNames = names(M2_sig),
-         num.boot = 100,
-         pb.show = FALSE)
-```
-
-#### AUC Boxplots {.tabset}
-```{r, message = FALSE}
-set.seed(0)
-compareBoxplots(ssgsea_res, annotationColName = "bmi_cat2",
-                signatureColNames = names(M2_sig),
-                pb.show = FALSE, fill.col = "blue",
-                rotateLabels = TRUE)
-```
-
-#### ROC plots
-```{r, message = FALSE, fig.height = 9, fig.width = 12}
-signatureROCplot_CI(inputData = ssgsea_res,
-                   signatureColNames = names(M2_sig),
-                   annotationColName = "bmi_cat2")
-
-```
-
-#### Separate ROC plots  {.tabset}
-
-```{r, results = 'asis', message = FALSE}
-for (i in names(M2_sig)){
-
-  cat("#####", i, "\n")
-
-  print(signatureROCplot_CI(inputData = ssgsea_res,
-                   signatureColNames = i,
-                   annotationColName = "bmi_cat2",
-                   name = paste("ROC plot,", i, sep = " ")))
-
-  cat("\n\n")
-}
-```
-
-#### Heatmap of Macrophage signatures
-
-```{r, message=FALSE}
-genenames <- indata@rowRanges@partitioning@NAMES
-use_genes <- which(M2_sig$m2_active_up %in% genenames)
-blue <- M2_sig$m2_active_up[use_genes]
-
-mat = as.matrix(assay(indata[blue,], "log_cpm"))
-mat = t(scale(t(mat)))
-
-df=data.frame(Nutrition=colData(indata)$"bmi_cat2")
-
-ha = HeatmapAnnotation(df = df, col =     list(TB_status=c("mal"="Red","well"="Blue")))
-
-Heatmap(mat,show_row_names=T,show_column_names = F, top_annotation = ha, name = "m1vm2_dn")
-```
-
-
-```{r, message=FALSE, include=FALSE}
-
-
-pathway=enrichr(real_genes,databases = c("WikiPathways_2019_Human","Reactome_2016","KEGG_2019_Human","Panther_2016"))
-
-```
-
-
-## Immune signatures {.tabset}
-```{r, message=FALSE, include=FALSE}
-imm_sigs_hyper <- c("GSE11057_NAIVE_VS_MEMORY_CD4_TCELL_UP",
-              "GSE26495_NAIVE_VS_PD1HIGH_CD8_TCELL_UP",
-              "GSE11057_NAIVE_VS_EFF_MEMORY_CD4_TCELL_UP",
-              "GSE26495_NAIVE_VS_PD1LOW_CD8_TCELL_UP",
-              "GSE11057_NAIVE_VS_CENT_MEMORY_CD4_TCELL_UP",
-              "GSE40274_FOXP3_VS_FOXP3_AND_XBP1_TRANSDUCED_ACTIVATED_CD4_TCELL_DN",
-              "GSE40274_FOXP3_VS_FOXP3_AND_XBP1_TRANSDUCED_ACTIVATED_CD4_TCELL_UP",
-              "GSE6269_E_COLI_VS_STAPH_AUREUS_INF_PBMC_UP",
-              "GSE11057_EFF_MEM_VS_CENT_MEM_CD4_TCELL_DN",
-              "GSE22886_NAIVE_BCELL_VS_BLOOD_PLASMA_CELL_DN",
-              "GSE17186_BLOOD_VS_CORD_BLOOD_CD21LOW_TRANSITIONAL_BCELL_DN",
-              "GSE17186_BLOOD_VS_CORD_BLOOD_CD21LOW_TRANSITIONAL_BCELL_UP",
-              "GSE30962_ACUTE_VS_CHRONIC_LCMV_SECONDARY_INF_CD8_TCELL_DN",
-              "GSE30962_ACUTE_VS_CHRONIC_LCMV_SECONDARY_INF_CD8_TCELL_UP",
-              "GSE30962_ACUTE_VS_CHRONIC_LCMV_PRIMARY_INF_CD8_TCELL_DN",
-              "GSE30962_ACUTE_VS_CHRONIC_LCMV_PRIMARY_INF_CD8_TCELL_UP",
-              "GSE2770_IL12_AND_TGFB_ACT_VS_ACT_CD4_TCELL_6H_UP",
-              "GSE24726_WT_VS_E2_2_KO_PDC_UP",
-              "GSE12845_IGD_POS_BLOOD_VS_PRE_GC_TONSIL_BCELL_DN",
-              "GSE6269_E_COLI_VS_STREP_PNEUMO_INF_PBMC_UP")
-
-imm_sigs <- c("GSE360_CTRL_VS_M_TUBERCULOSIS_DC_DN",
-  "GSE360_CTRL_VS_M_TUBERCULOSIS_DC_UP",
-  "GSE360_CTRL_VS_M_TUBERCULOSIS_MAC_DN",
-  "GSE360_CTRL_VS_M_TUBERCULOSIS_MAC_UP",
-  "GSE360_DC_VS_MAC_M_TUBERCULOSIS_DN",
-  "GSE360_DC_VS_MAC_M_TUBERCULOSIS_UP",
-  "GSE5099_CLASSICAL_M1_VS_ALTERNATIVE_M2_MACROPHAGE_DN",
-  "GSE5099_CLASSICAL_M1_VS_ALTERNATIVE_M2_MACROPHAGE_UP",
-  "GSE5099_MONOCYTE_VS_ALTERNATIVE_M2_MACROPHAGE_DN",
-  "GSE5099_MONOCYTE_VS_ALTERNATIVE_M2_MACROPHAGE_UP",
-  "GSE5099_MONOCYTE_VS_CLASSICAL_M1_MACROPHAGE_DN",
-  "GSE5099_MONOCYTE_VS_CLASSICAL_M1_MACROPHAGE_UP",
-  "GSE11057_NAIVE_CD4_VS_PBMC_CD4_TCELL_DN",
-  "GSE11057_NAIVE_CD4_VS_PBMC_CD4_TCELL_UP",
-  "GSE13887_ACT_CD4_VS_NO_TREATED_CD4_TCELL_DN",
-  "GSE13887_ACT_CD4_VS_NO_TREATED_CD4_TCELL_UP",
-  "GSE27786_CD4_VS_CD8_TCELL_DN",
-  "GSE27786_CD4_VS_CD8_TCELL_UP",
-  "GSE32164_RESTING_DIFFERENTIATED_VS_ALTERNATIVELY_ACT_M2_MACROPHAGE_DN",
-  "GSE32164_RESTING_DIFFERENTIATED_VS_ALTERNATIVELY_ACT_M2_MACROPHAGE_UP"
-  
-  )
-
-```
-
-
-### ImmGenecheck function
-```{r imm_genecheck, include=FALSE}
-ImmGenecheck <- function(imm_sigs) {
-  
-  ## base_url of database gene libraries, make url of selected database
-  baseurl <- "https://www.gsea-msigdb.org/gsea/msigdb/download_geneset.jsp?geneSetName="
-  text_type <- "&fileType=txt"
-  
-  ## initialize list (to save time?)
-  imm_sig_loc <- list()
-  imm_sig_txt <- list()
-  
-  
-  for(i in seq(imm_sigs)) {
-    imm_sig_loc[i] <- paste0(baseurl,imm_sigs[i], text_type)
-  
-    imm_sig_txt[[i]] <- read_tsv(imm_sig_loc[[i]])
-    imm_sig_txt[[i]] <- (imm_sig_txt[[i]][-1,])
-    imm_sig_txt[[i]] <- pull(imm_sig_txt[[i]], 1)
-    
-  
-    
- 
-    
-  }
-  names(imm_sig_txt) <- imm_sigs
-  return(imm_sig_txt)
-}
-```
-
-### TBSignatureProfiler on Immune signatures {.tabset}
-```{r}
-
-imm_sigs <- ImmGenecheck(imm_sigs)
-imm_sigs_hyper <- ImmGenecheck(imm_sigs_hyper)
-
-```
-
-#### Immune Signatures GSVA-ssGSEA
-```{r, message=FALSE}
-gsva_res <- runTBsigProfiler(indata, useAssay = "log_cpm", algorithm = "GSVA",
-                             signatures = imm_sigs, parallel.sz = 4)
-ssgsea_res <- runTBsigProfiler(indata, useAssay = "log_cpm", algorithm = "ssGSEA",
-                               signatures = imm_sigs, parallel.sz = 4)
-
-
-
-
-```
-
-### GSVA {.tabset}
-
-#### Heatmap
-
-```{r }
-signatureHeatmap(gsva_res, name="GSVA", signatureColNames = names(imm_sigs),
-                 annotationColNames = c("bmi_cat2"),
-                 showColumnNames = FALSE,
-                 split_heatmap='none')
-```
-
-
-#### Boxplot
-
-```{r , message=FALSE}
-signatureBoxplot(gsva_res, name="GSVA", signatureColNames = names(imm_sigs),
-                 annotationColName = c("bmi_cat2"))# , rotateLabels = TRUE)
-```
-
-#### Boxplots Single {.tabset}
-
-```{r, message=FALSE , results="asis"}
-for (i in names(imm_sigs)){
-
-  cat("#####", i, "\n")
-
-  print(signatureBoxplot(gsva_res,
-                         name=i, 
-                         signatureColNames = i,
-                         annotationColName = c("bmi_cat2"),   
-                         violinPlot = TRUE,
-                         rotateLabels = T))
-
-  cat("\n\n")
-}
-
-```
-
-#### Signature plots {.tabset}
-```{r, message=FALSE , results="asis"}
-for (i in names(imm_sigs)){
-
-  cat("#####", i, "\n")
-
-  signatureGeneHeatmap(gsva_res, useAssay="log_cpm",
-                     samp_tbsignatures[[i]],
-                     name = i, signatureColNames = NULL,
-                     annotationColNames = c("bmi_cat2",i),
-                     showColumnNames = TRUE, 
-                     column_order = NULL)
-
-  cat("\n\n")
-}
-
-```
-
-#### AUC Table {.tabset}
-```{r, message = FALSE}
-set.seed(0)
-tableAUC(gsva_res,
-         annotationColName = "bmi_cat2",
-         signatureColNames = names(imm_sigs),
-         num.boot = 100,
-         pb.show = FALSE)
-```
-
-#### AUC Boxplots
-```{r, message = FALSE}
-set.seed(0)
-compareBoxplots(gsva_res, annotationColName = "bmi_cat2",
-                signatureColNames = names(imm_sigs),
-                pb.show = FALSE, fill.col = "blue",
-                rotateLabels = TRUE)
-```
-
-#### ROC plots
-```{r, message = FALSE, fig.height = 9, fig.width = 12}
-signatureROCplot_CI(inputData = gsva_res,
-                   signatureColNames = names(imm_sigs),
-                   annotationColName = "bmi_cat2")
-
-```
-
-#### Separate ROC plots  {.tabset}
-
-```{r, results = 'asis', message = FALSE}
-for (i in names(imm_sigs)){
-
-  cat("#####", i, "\n")
-
-  print(signatureROCplot_CI(inputData = gsva_res,
-                   signatureColNames = i,
-                   annotationColName = "bmi_cat2",
-                   name = paste("ROC plot,", i, sep = " ")))
-
-  cat("\n\n")
-}
-```
-
-
-### ssGSEA {.tabset}
-
-#### Heatmap
-
-```{r , message=FALSE}
-signatureHeatmap(ssgsea_res, name="ssGSEA", signatureColNames = names(imm_sigs),
-                 annotationColNames = c("bmi_cat2"),
-                 showColumnNames = FALSE, scale = TRUE,
-                 split_heatmap='none')
-```
-
-#### Boxplot
-
-```{r , message=FALSE}
-signatureBoxplot(ssgsea_res, name="ssGSEA", signatureColNames = names(imm_sigs),
-                 annotationColName = c("bmi_cat2"), scale = TRUE) #rotateLabels = TRUE,
-```
-
-#### Boxplots Single {.tabset}
-
-```{r , message=FALSE, results="asis"}
-for (i in names(imm_sigs)){
-
-  cat("#####", i, "\n")
-
-  print(signatureBoxplot(ssgsea_res, name=i, signatureColNames = i,
-                 annotationColName = c("bmi_cat2"), rotateLabels = T))
-
-  cat("\n\n")
-}
-
-```
-
-#### Signature plots {.tabset}
-```{r, message=FALSE , results="asis"}
-for (i in names(imm_sigs)){
-
-  cat("#####", i, "\n")
-
-  signatureGeneHeatmap(ssgsea_res, useAssay="log_cpm",
-                     samp_tbsignatures[[i]],
-                     name = i, signatureColNames = NULL,
-                     annotationColNames = c("bmi_cat2",i),
-                     showColumnNames = FALSE, 
-                     column_order =  NULL)
-
-  cat("\n\n")
-}
-
-```
-
-
-#### AUC Table
-```{r, message = FALSE}
-set.seed(0)
-tableAUC(ssgsea_res,
-         annotationColName = "bmi_cat2",
-         signatureColNames = names(imm_sigs),
-         num.boot = 100,
-         pb.show = FALSE)
-```
-
-#### AUC Boxplots {.tabset}
-```{r, message = FALSE}
-set.seed(0)
-compareBoxplots(ssgsea_res, annotationColName = "bmi_cat2",
-                signatureColNames = names(imm_sigs),
-                pb.show = FALSE, fill.col = "blue",
-                rotateLabels = TRUE)
-```
-
-#### ROC plots
-```{r, message = FALSE, fig.height = 9, fig.width = 12}
-signatureROCplot_CI(inputData = ssgsea_res,
-                   signatureColNames = names(imm_sigs),
-                   annotationColName = "bmi_cat2")
-
-```
-
-#### Separate ROC plots  {.tabset}
-
-```{r, results = 'asis', message = FALSE}
-for (i in names(imm_sigs)){
-
-  cat("#####", i, "\n")
-
-  print(signatureROCplot_CI(inputData = ssgsea_res,
-                   signatureColNames = i,
-                   annotationColName = "bmi_cat2",
-                   name = paste("ROC plot,", i, sep = " ")))
-
-  cat("\n\n")
-}
-```
-
-### Hyper-generated immune signatures
-
-```{r, message=FALSE}
-gsva_res <- runTBsigProfiler(indata, useAssay = "log_cpm", algorithm = "GSVA",
-                             signatures = imm_sigs_hyper, parallel.sz = 4)
-ssgsea_res <- runTBsigProfiler(indata, useAssay = "log_cpm", algorithm = "ssGSEA",
-                               signatures = imm_sigs_hyper, parallel.sz = 4)
-
-```
-
-
-### GSVA {.tabset}
-
-#### Heatmap
-
-```{r, hyper-imm-sigs-heatmap }
-signatureHeatmap(gsva_res, name="GSVA", signatureColNames = names(imm_sigs_hyper),
-                 annotationColNames = c("bmi_cat2"),
-                 showColumnNames = FALSE,
-                 split_heatmap='none')
-```
-
-
-#### Boxplot
-
-```{r  }
-signatureBoxplot(gsva_res, name="GSVA", signatureColNames = names(imm_sigs_hyper),
-                 annotationColName = c("bmi_cat2"))# , rotateLabels = TRUE)
-```
-
-#### Boxplots Single {.tabset}
-
-```{r, message=FALSE , results="asis"}
-for (i in names(imm_sigs_hyper)){
-
-  cat("#####", i, "\n")
-
-  print(signatureBoxplot(gsva_res,
-                         name=i, 
-                         signatureColNames = i,
-                         annotationColName = c("bmi_cat2"),   
-                         violinPlot = TRUE,
-                         rotateLabels = T))
-
-  cat("\n\n")
-}
-
-```
-
-#### Signature plots {.tabset}
-```{r, message=FALSE , results="asis"}
-for (i in names(imm_sigs_hyper)){
-
-  cat("#####", i, "\n")
-
-  signatureGeneHeatmap(gsva_res, useAssay="log_cpm",
-                     samp_tbsignatures[[i]],
-                     name = i, signatureColNames = NULL,
-                     annotationColNames = c("bmi_cat2",i),
-                     showColumnNames = TRUE, 
-                     column_order = NULL)
-
-  cat("\n\n")
-}
-
-```
-
-#### AUC Table {.tabset}
-```{r, message = FALSE }
-set.seed(0)
-tableAUC(gsva_res,
-         annotationColName = "bmi_cat2",
-         signatureColNames = names(imm_sigs_hyper),
-         num.boot = 100,
-         pb.show = FALSE)
-```
-
-#### AUC Boxplots
-```{r, message = FALSE }
-set.seed(0)
-compareBoxplots(gsva_res, annotationColName = "bmi_cat2",
-                signatureColNames = names(imm_sigs_hyper),
-                pb.show = FALSE, fill.col = "blue",
-                rotateLabels = TRUE)
-```
-
-#### ROC plots
-```{r, message = FALSE, fig.height = 9, fig.width = 12 }
-signatureROCplot_CI(inputData = gsva_res,
-                   signatureColNames = names(imm_sigs_hyper),
-                   annotationColName = "bmi_cat2")
-
-```
-
-#### Separate ROC plots  {.tabset}
-
-```{r, results = 'asis', message = FALSE }
-for (i in names(imm_sigs_hyper)){
-
-  cat("#####", i, "\n")
-
-  print(signatureROCplot_CI(inputData = gsva_res,
-                   signatureColNames = i,
-                   annotationColName = "bmi_cat2",
-                   name = paste("ROC plot,", i, sep = " ")))
-
-  cat("\n\n")
-}
-```
-
-
-### ssGSEA {.tabset}
-
-#### Heatmap
-
-```{r , message=FALSE }
-signatureHeatmap(ssgsea_res, name="ssGSEA", signatureColNames = names(imm_sigs_hyper),
-                 annotationColNames = c("bmi_cat2"),
-                 showColumnNames = FALSE, scale = TRUE,
-                 split_heatmap='none')
-```
-
-#### Boxplot
-
-```{r , message=FALSE }
-signatureBoxplot(ssgsea_res, name="ssGSEA", signatureColNames = names(imm_sigs_hyper),
-                 annotationColName = c("bmi_cat2"), scale = TRUE) #rotateLabels = TRUE,
-```
-
-#### Boxplots Single {.tabset}
-
-```{r , message=FALSE, results="asis" }
-for (i in names(imm_sigs_hyper)){
-
-  cat("#####", i, "\n")
-
-  print(signatureBoxplot(ssgsea_res, name=i, signatureColNames = i,
-                 annotationColName = c("bmi_cat2"), rotateLabels = T))
-
-  cat("\n\n")
-}
-
-```
-
-#### Signature plots {.tabset}
-```{r, message=FALSE , results="asis" }
-for (i in names(imm_sigs_hyper)){
-
-  cat("#####", i, "\n")
-
-  signatureGeneHeatmap(ssgsea_res, useAssay="log_cpm",
-                     samp_tbsignatures[[i]],
-                     name = i, signatureColNames = NULL,
-                     annotationColNames = c("bmi_cat2",i),
-                     showColumnNames = FALSE, 
-                     column_order =  NULL)
-
-  cat("\n\n")
-}
-
-```
-
-
-#### AUC Table
-```{r, message = FALSE }
-set.seed(0)
-tableAUC(ssgsea_res,
-         annotationColName = "bmi_cat2",
-         signatureColNames = names(imm_sigs_hyper),
-         num.boot = 100,
-         pb.show = FALSE)
-```
-
-#### AUC Boxplots {.tabset}
-```{r, message = FALSE }
-set.seed(0)
-compareBoxplots(ssgsea_res, annotationColName = "bmi_cat2",
-                signatureColNames = names(imm_sigs_hyper),
-                pb.show = FALSE, fill.col = "blue",
-                rotateLabels = TRUE)
-```
-
-#### ROC plots
-```{r, message = FALSE, fig.height = 9, fig.width = 12 }
-signatureROCplot_CI(inputData = ssgsea_res,
-                   signatureColNames = names(imm_sigs_hyper),
-                   annotationColName = "bmi_cat2")
-
-```
-
-#### Separate ROC plots  {.tabset}
-
-```{r, results = 'asis', message = FALSE }
-for (i in names(imm_sigs_hyper)){
-
-  cat("#####", i, "\n")
-
-  print(signatureROCplot_CI(inputData = ssgsea_res,
-                   signatureColNames = i,
-                   annotationColName = "bmi_cat2",
-                   name = paste("ROC plot,", i, sep = " ")))
-
-  cat("\n\n")
-}
-```
-
 
 # Non-normalized Enrichment Scores {.tabset}
 ```{r, message=FALSE, results='hide'}
 
-
-
-
-TBsignatures$Leong_RISK_29 <- c("SRBD1", "ZNF419", "SH2D1B","CTSA", "GSTA4", "AGAP9", "MOB3C", "WARS1", "LUC7L", "ZNRF1", "CIRBP", "PRSS53", "APOL6", "TCN2", "MDN1", "SNRNP70", "SLC3A1", "NAGA", "SPDYE5",  "SPSB1", "CCDC14",  "IL31RA", "DERA", "FUT4",
-"NEIL1",   "ENO3",   "CCDC78", "HM13","ZNF202" )
-
-TBsignatures$Zak_RISK_16 <- c("ANKRD22","APOL1","BATF2" ,"ETV7","FCGR1A", "FCGR1B",  "GBP1","GBP2","GBP4","GBP5", "SCARF1","SEPTIN4", "SERPING1", "STAT1","TAP1","TRAFD1")
-TBsignatures$Suliman_RISK_4 <- c("GAS6", "SEPTIN4", "CD1C", "BLK")
-
-#selected tb signatures
-samp_tbsignatures <- list(TBsignatures$Suliman_RISK_4, TBsignatures$Sweeney_OD_3, TBsignatures$Leong_RISK_29, TBsignatures$Zak_RISK_16)
-names(samp_tbsignatures) <- c("Suliman_RISK_4", "Sweeney_OD_3", "Leong_RISK_29", "Zak_RISK_16")
 
 
 fold_ssgsea_res <- runTBsigProfiler(indata, useAssay = "log_cpm", algorithm = "ssGSEA",
@@ -1494,6 +557,8 @@ signatureBoxplot(fold_ssgsea_res, name="ssGSEA", signatureColNames = names(samp_
 ## Percentiles {.tabset}
 ### Mal greater than 75 Percentile of well
 ```{r}
+## for each risk signature, the # of samples in the malnourished group with a higher ssGSEA score relative to the 75th percentile of the well-nourished
+
 p75_zak <- mean(colData(fold_ssgsea_res)$Zak_RISK_16[colData(fold_ssgsea_res)$bmi_cat2 == "mal"] > quantile(colData(fold_ssgsea_res)$Zak_RISK_16[colData(fold_ssgsea_res)$bmi_cat2 == "well"], .75))
 
 p75_sul <- mean(colData(fold_ssgsea_res)$Suliman_RISK_4[colData(fold_ssgsea_res)$bmi_cat2 == "mal"] > quantile(colData(fold_ssgsea_res)$Suliman_RISK_4[colData(fold_ssgsea_res)$bmi_cat2 == "well"], .75))
@@ -1510,6 +575,8 @@ p75_leong
 
 ### Mal greater than 90 Percentile of well
 ```{r}
+## malnourished ssGSEA scores above the 90th percentile of well-nourished
+
 p90_zak <- mean(colData(fold_ssgsea_res)$Zak_RISK_16[colData(fold_ssgsea_res)$bmi_cat2 == "mal"] > quantile(colData(fold_ssgsea_res)$Zak_RISK_16[colData(fold_ssgsea_res)$bmi_cat2 == "well"], .90))
 
 p90_sul <- mean(colData(fold_ssgsea_res)$Suliman_RISK_4[colData(fold_ssgsea_res)$bmi_cat2 == "mal"] > quantile(colData(fold_ssgsea_res)$Suliman_RISK_4[colData(fold_ssgsea_res)$bmi_cat2 == "well"], .90))
