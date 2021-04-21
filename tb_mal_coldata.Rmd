@@ -1,0 +1,156 @@
+---
+title: "TB_MAL_SUBJID_DATA"
+output: html_notebook
+---
+
+```{r}
+library(RODBC)
+library(tidyverse)
+library(readxl)
+library(lubridate)
+```
+
+```{r}
+dta <- odbcConnectAccess2007("20210326_Indo-US VAP.accdb")   #specifies the file path
+
+# original data for comparison
+subj_data <- read_xlsx("subject_coldata_cc_excel.xlsx")
+
+```
+
+```{r}
+# importing appropriate tables from database
+df.1A_ICScreening<- sqlFetch(dta, "1A_ICScreening") ## male/female/age
+df.1A_ICScreening<-filter(df.1A_ICScreening, SUBJID %in% subj_data$SUBJID)
+
+df.1B_HCScreening<- sqlFetch(dta, "1B_HCScreening")## male/female/age
+df.1B_HCScreening<-filter(df.1B_HCScreening, SUBJID %in% subj_data$SUBJID)
+
+
+df.2A_ICBaseline<- sqlFetch(dta, "2A_ICBaseline")
+df.2A_ICBaseline<-filter(df.2A_ICBaseline, SUBJID %in% subj_data$SUBJID)
+
+df.2B_HCBaseline<- sqlFetch(dta, "2B_HCBaseline")
+df.2B_HCBaseline<-filter(df.2B_HCBaseline, SUBJID %in% subj_data$SUBJID)
+
+
+
+```
+
+
+# Smoking and alcohol use
+```{r}
+# pick which columns to keep from initial contacts and household contacts
+ic_select <- c("SUBJID","FID", "IC_ALCDOSTX","IC_ALCFRQ", "IC_ALCUSE", "IC_SMOKHX" ,"IC_WEIGHT", "IC_HEIGHT", "IC_RBS", "IC_DMDX" )
+hc_select <- c("SUBJID", "FID", "HC_ALCDOSTX","HC_ALCFRQ", "HC_ALCUSE", "HC_SMOKHX", "HC_DMDX", "HC_RBS","HC_WEIGHT", "HC_HEIGHT")
+
+
+# select only columns with smoking or alcohol data plus ID's
+df.2A_ICBaseline <- select_if(df.2A_ICBaseline, colnames(df.2A_ICBaseline) %in% ic_select)
+
+#df.2A_ICBaseline$HC_DMDX <- rep("No")
+#df.2A_ICBaseline$HC_RBS <- NA
+
+df.2B_HCBaseline <- select_if(df.2B_HCBaseline, colnames(df.2B_HCBaseline) %in% hc_select)
+
+
+
+# change names of each dataframe at baseline to match each other
+names(df.2A_ICBaseline ) <- c("SUBJID","FID", "ALCFRQ", "ALCDOSTX","ALCUSE", "SMOKHX", "HC_DMDX", "HC_WEIGHT", "HC_HEIGHT", "HC_RBS")
+
+names(df.2B_HCBaseline ) <- c("SUBJID","FID", "ALCFRQ", "ALCDOSTX","ALCUSE", "SMOKHX", "HC_DMDX","HC_WEIGHT", "HC_HEIGHT", "HC_RBS")
+
+df.2_baseline <- rbind(df.2A_ICBaseline, df.2B_HCBaseline)
+
+
+## Calculate alcohol/smoking data
+
+samples <- subj_data$SUBJID
+
+
+# only use selected samples by subject id
+df.2_baseline %>% filter(SUBJID %in% samples)
+df  <-  distinct(df.2_baseline)
+
+# make alcohol column with any alcohol
+df$ALC <-  rowSums(df[,c(3:5)], na.rm = TRUE)
+
+sum(df$ALCDOSTX %in% subj_data$alcdostx) # all same
+sum(df$ALCUSE %in% subj_data$alcuse) # all same
+sum(df$SMOKHX %in% subj_data$HC_SMOKHX) # all same
+
+
+# calculate BMI
+
+df <- df %>% 
+  mutate(BMI = HC_WEIGHT/(HC_HEIGHT/100)^2, bmi_cat2 = ifelse(BMI>16, "well", "mal"))
+
+# removing duplicate SUBJID whose BMI is different from original
+df <- df[-42,]
+```
+
+## Calculate male/female/age
+```{r}
+
+# pick which columns to keep from initial contacts and household contacts
+ic_select <- c("SUBJID","FID", "IS_SEX", "IS_AGE", "IS_BIRTHDAT", "IS_AGEEST", "IS_VISDAT"  )
+hc_select <- c("SUBJID", "FID", "HHC_SEX", "HHC_AGE", "HHC_BRTHDAT", "HHC_AGEEST", "HHC_VISDAT", "HC_DMDX", "HC_RBS")
+
+
+# select only columns with smoking or alcohol data plus ID's
+df.1A_ICScreening <- select_if(df.1A_ICScreening, colnames(df.1A_ICScreening) %in% ic_select)
+
+df.1B_HCScreening <- select_if(df.1B_HCScreening, colnames(df.1B_HCScreening) %in% hc_select)
+
+# change names of each dataframe at baseline to match each other
+names(df.1A_ICScreening ) <- c("SUBJID","FID", "VISDAT", "SEX",  "BRTHDAT", "AGE", "AGEEST")
+
+names(df.1B_HCScreening ) <- c("SUBJID","FID","VISDAT", "SEX", "BRTHDAT", "AGE", "AGEEST")
+
+df.1 <- rbind(df.1A_ICScreening, df.1B_HCScreening)
+
+# remove duplicate
+df.1 <- distinct(df.1)
+
+df.1$VISDAT <- ymd(df.1$VISDAT)
+df.1$BRTHDAT <- ymd(df.1$BRTHDAT)
+
+df.1 <- df.1 %>% 
+  mutate(EST_AGE = round(interval(start=BRTHDAT, end = VISDAT)/dyears(1))) 
+  
+df.1$AGE <- as.numeric(df.1$AGE)
+df.1$EST_AGE <- as.numeric(df.1$EST_AGE)
+
+df.1 <- df.1 %>% 
+  rowwise() %>% 
+  mutate(CALC_AGE = sum(EST_AGE, AGE, na.rm = TRUE))
+
+#remove the FID column to make it easier to merge
+df.1 <- df.1[,-2]
+
+```
+
+# Merging and removing columns we don't need
+```{r}
+# combine the two dataframes
+table1 <- merge(df, df.1, by="SUBJID")
+
+# change the alcohol to "Ever" or "Never"
+table1$ALC <- ifelse(table1$ALC > 0, "Ever", "Never")
+
+# making Diabetes column with RBS data
+table1$DMDX <- ifelse(table1$HC_RBS < 200 & !is.na(table1$HC_RBS) | table1$HC_DMDX == "Yes", "Yes", "No")
+
+# removing unwanted columns
+columns_to_keep <- c("SUBJID", "FID", "SMOKHX", "ALC", "BMI", "bmi_cat2", "SEX", "CALC_AGE", "DMDX")
+table1 <- select(table1, all_of(columns_to_keep))
+
+HC_RLTN <- subj_data[,c("SUBJID", "HC_RELATN")]
+
+table1 <- merge(table1, HC_RLTN, by= "SUBJID")
+
+table1 <- table1 %>% rename(AGE = CALC_AGE)
+# make into csv file
+write.csv(table1, "table1_data.csv")
+```
+

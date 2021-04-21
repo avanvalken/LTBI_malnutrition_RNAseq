@@ -1,0 +1,307 @@
+---
+title: "Demographics analysis"
+author: "avanvalken"
+date: "3/18/2021"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# load data
+```{r}
+df <- read.csv("table1_data.csv")
+
+#remove rownames column
+df <- df[,-1]
+
+```
+# clean data
+```{r}
+# df$SEX <- as.factor(df$SEX)
+# df$ALC <- as.factor(df$ALC)
+# relabel these as "well"
+relabel <- c("10200548B", "10200467B", "10200131B", "10200350B", "10200365B")
+
+df[(match(relabel, df$SUBJID)), "bmi_cat2"] <- "well"
+# subset into SM and Controls
+df.mal <- subset(df, bmi_cat2=="mal")
+df.well <- subset(df, bmi_cat2=="well")
+
+```
+
+# AGE stats
+```{r}
+# ranges and medians of total, SM, and controls
+range(df$AGE) #10-80
+median(df$AGE) #26.5
+
+range(df.mal$AGE) #10-23
+median(df.mal$AGE) #13
+
+range(df.well$AGE) #13-80
+median(df.well$AGE) #36
+
+
+# test for variance
+var.test(AGE ~ bmi_cat2, data=df) # F=0.77161, p-value=0.6052; might be good enough to consider the same, but using Welch's t-test anyway
+
+# Welch 2-sample t-test; variances unequal; if variances are =, than p=0.6
+test <- t.test(AGE ~ bmi_cat2,
+  data = df,
+  var.equal = FALSE,
+  alternative = "two.sided"
+)
+test # p-value= 0.5863
+```
+
+# SEX stats
+```{r}
+# total
+## number males
+sum(df$SEX=="Male  ") 
+## number females
+sum(df$SEX=="Female") 
+## percentAGE male/female
+mean(df$SEX=="Male  ") 
+mean(df$SEX=="Female") 
+
+
+# SM (SEX=1 <- Male  )
+sum(df.mal$SEX=="Male  ") 
+## number females
+sum(df.mal$SEX=="Female") 
+## percentAGE male/female
+mean(df.mal$SEX=="Male  ") 
+mean(df.mal$SEX=="Female") 
+
+# Control
+sum(df.well$SEX=="Male  ") 
+## number females
+sum(df.well$SEX=="Female") 
+## percentAGE male/female
+mean(df.well$SEX=="Male  ") 
+mean(df.well$SEX=="Female") 
+
+
+
+#### do fisher's here
+# 2-sample test for equality of proportions with continuity correction
+f_table <- matrix(c(3,8,21,18),ncol=2)
+test <- fisher.test(x = f_table, alternative = 'two.sided')
+test
+
+test$p.value
+
+# p-value = 0.1754
+
+
+
+
+```
+
+# alcohol
+```{r}
+# total
+## number 
+sum(df$ALC == "Ever") 
+sum(df$ALC == "Never") 
+
+
+mean(df$ALC == "Ever") 
+mean(df$ALC == "Never")
+
+
+# SM 
+sum(df.mal$ALC == "Ever") 
+sum(df.mal$ALC == "Never")
+
+## percentAGE 
+mean(df.mal$ALC == "Ever")  
+mean(df.mal$ALC == "Never") 
+
+# Control
+sum(df.well$ALC == "Ever") 
+sum(df.well$ALC == "Never") 
+
+## percentAGE 
+mean(df.well$ALC == "Ever") 
+mean(df.well$ALC == "Never")
+
+f_table <- matrix(c(0,11,6,33),ncol=2)
+# fisher's exact test due to small counts
+test <- fisher.test(x = f_table, alternative = 'two.sided')
+test
+
+test$p.value
+
+#p-val=0.1587371
+```
+
+
+
+# smoking 
+```{r}
+# total
+## number 
+sum(df$SMOKHX != "No, never") #1 ever
+sum(df$SMOKHX == "No, never") #49 never
+
+
+mean(df$SMOKHX != "No, never") #0.02; never
+mean(df$SMOKHX == "No, never") #0.98 ever
+
+
+# SM 
+sum(df.mal$SMOKHX != "No, never") #0 ever
+sum(df.mal$SMOKHX  == "No, never") #16 never
+
+## percentAGE 
+mean(df.mal$SMOKHX != "No, never") #0 ever 
+mean(df.mal$SMOKHX  == "No, never") #1.00 never
+
+# Control
+sum(df.well$SMOKHX != "No, never") #1 ever
+sum(df.well$SMOKHX  == "No, never") #33 never
+
+## percentAGE 
+mean(df.well$SMOKHX != "No, never") #0.03 ever 
+mean(df.well$SMOKHX  == "No, never") #0.97 never
+
+f_table <- matrix(c(0,11,1,38),ncol=2)
+# fisher's exact test due to small counts
+test <- fisher.test(x = f_table, alternative = 'two.sided')
+test
+
+test$p.value
+
+#p-val=1
+```
+
+# Diabetes
+```{r}
+# total
+## number 
+sum(df$DMDX != "No") #4 Yes
+sum(df$DMDX == "No") #46 No
+
+
+mean(df$DMDX != "No") #0.08; Yes
+mean(df$DMDX == "No") #0.92 No
+
+
+# SM 
+sum(df.mal$DMDX != "No") #1 yes
+sum(df.mal$DMDX  == "No") #15 no
+
+## percentAGE 
+mean(df.mal$DMDX != "No") #0.0625 ever 
+mean(df.mal$DMDX  == "No") #0.9375 never
+
+# Control
+sum(df.well$DMDX != "No") #3 yes
+sum(df.well$DMDX  == "No") #31 never
+
+## percentAGE 
+mean(df.well$DMDX != "No") #0.088 ever 
+mean(df.well$DMDX  == "No") #0.912 never
+
+f_table <- matrix(c(1,10,3,36),ncol=2)
+# fisher's exact test due to small counts
+test <- fisher.test(x = f_table, alternative = 'two.sided')
+test
+
+test$p.value
+
+#p-val=1
+```
+
+# Relationship to PLWTB
+```{r}
+
+#sibling
+sum(df$HC_RELATN == "Brother/Sister", na.rm = TRUE) #6
+mean(df$HC_RELATN == "Brother/Sister", na.rm = TRUE) #12.8
+
+sum(df.mal$HC_RELATN == "Brother/Sister", na.rm = TRUE) #3
+mean(df.mal$HC_RELATN == "Brother/Sister", na.rm = TRUE) #20.0
+
+sum(df.well$HC_RELATN == "Brother/Sister", na.rm = TRUE) #3
+mean(df.well$HC_RELATN == "Brother/Sister", na.rm = TRUE) #9.4
+
+
+
+#parent
+
+sum(df$HC_RELATN == "Mother" |df$HC_RELATN == "Father", na.rm = TRUE) #4
+mean(df$HC_RELATN == "Mother" |df$HC_RELATN == "Father", na.rm = TRUE) #.0851
+
+sum(df.mal$HC_RELATN == "Mother" |df.mal$HC_RELATN == "Father", na.rm = TRUE) #0
+mean(df.mal$HC_RELATN == "Mother" |df.mal$HC_RELATN == "Father", na.rm = TRUE) #0
+
+sum(df.well$HC_RELATN == "Mother" |df.well$HC_RELATN == "Father", na.rm = TRUE) #4
+mean(df.well$HC_RELATN == "Mother" |df.well$HC_RELATN == "Father", na.rm = TRUE) #0.125
+
+
+
+#child 
+sum(df$HC_RELATN == "Son/Daughter" | df$HC_RELATN == "Niece/Nephew
+" | df$HC_RELATN == "Grandchild", na.rm = TRUE) #20
+mean(df$HC_RELATN == "Son/Daughter" | df$HC_RELATN == "Niece/Nephew
+"| df$HC_RELATN == "Grandchild", na.rm = TRUE) #0.426
+
+sum(df.well$HC_RELATN == "Son/Daughter" | df.well$HC_RELATN == "Niece/Nephew" | df.well$HC_RELATN == "Grandchild", na.rm = TRUE) #10
+mean(df.well$HC_RELATN == "Son/Daughter" | df.well$HC_RELATN == "Niece/Nephew
+"| df.well$HC_RELATN == "Grandchild", na.rm = TRUE) #0.25
+
+sum(df.mal$HC_RELATN == "Son/Daughter" | df.mal$HC_RELATN == "Niece/Nephew
+"| df.mal$HC_RELATN == "Grandchild", na.rm = TRUE) #12
+mean(df.mal$HC_RELATN == "Son/Daughter" | df.mal$HC_RELATN == "Niece/Nephew"| df.mal$HC_RELATN == "Grandchild", na.rm = TRUE) #0.8
+
+#spouse
+sum(df$HC_RELATN == "Spouse", na.rm = TRUE) #14
+mean(df$HC_RELATN == "Spouse", na.rm = TRUE) #.298
+
+sum(df.mal$HC_RELATN == "Spouse", na.rm = TRUE) #0
+mean(df.mal$HC_RELATN == "Spouse", na.rm = TRUE) #0
+
+sum(df.well$HC_RELATN == "Spouse", na.rm = TRUE) #14
+mean(df.well$HC_RELATN == "Spouse", na.rm = TRUE) #.4375
+
+
+#other (just calculated by hand, this code won't really work bc of NA's for the 3 mislabled LTBI as TB)
+sum(df$HC_RELATN != c("Brother/Sister", "Spouse", "Son/Daughter", "Niece/Nephew", "Grandchild", "Father", "Mother"), na.action(df$HC_RELATN, )) #4
+mean(df$HC_RELATN == "Brother/Sister", na.rm = TRUE) #.08
+
+
+sum(df.mal$HC_RELATN == "Brother/Sister", na.rm = TRUE) #1
+mean(df.mal$HC_RELATN == "Brother/Sister", na.rm = TRUE) #0.0625
+
+sum(df.well$HC_RELATN == "Brother/Sister", na.rm = TRUE) #3
+mean(df.well$HC_RELATN == "Brother/Sister", na.rm = TRUE) #0.0882
+
+
+f_table <- matrix(c(3,0,7,0,1,3,4,15,14,3), ncol = 2)
+
+test <- fisher.test(x = f_table, alternative = 'two.sided')
+test
+
+test$p.value
+
+```
+
+
+
+
+
+
+
+
+
+
+
